@@ -1,0 +1,12 @@
+.git
+.idea
+.DS_Store
+**/.DS_Store
+**/node_modules
+**/dist
+**/target
+imags
+docs
+.env
+.env.*
+!.env.example

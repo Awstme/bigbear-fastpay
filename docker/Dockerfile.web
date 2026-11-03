@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+
+FROM node:20-alpine AS admin-build
+WORKDIR /app
+COPY fastpay-admin/package.json fastpay-admin/package-lock.json ./
+RUN npm ci
+COPY fastpay-admin/ ./
+RUN npm run build
+
+FROM node:20-alpine AS merchant-build
+WORKDIR /app
+COPY fastpay-merchant/package.json fastpay-merchant/package-lock.json ./
+RUN npm ci
+COPY fastpay-merchant/ ./
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=admin-build /app/dist /usr/share/nginx/html/fastpay-admin
+COPY --from=merchant-build /app/dist /usr/share/nginx/html/fastpay-merchant
+EXPOSE 80

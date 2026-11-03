@@ -4,6 +4,9 @@
 -- 说明：本脚本用于初始化 Fast 易支付系统的数据库表结构
 -- =====================================================
 
+-- 避免客户端默认字符集导致中文种子数据乱码
+SET NAMES utf8mb4;
+
 -- 创建数据库
 CREATE DATABASE IF NOT EXISTS bigbear_fastpay DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci;
 

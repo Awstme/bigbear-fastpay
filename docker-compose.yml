@@ -1,0 +1,78 @@
+name: fastpay
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: fastpay-mysql
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-fastpay-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-bigbear_fastpay}
+      MYSQL_USER: ${MYSQL_USER:-fastpay}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-fastpay}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_general_ci
+      - --default-time-zone=+08:00
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./fastpay-server/src/main/resources/db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    # 需要从宿主机直连数据库时取消注释
+    # ports:
+    #   - "3306:3306"
+
+  server:
+    build: ./fastpay-server
+    container_name: fastpay-server
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: prod
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${MYSQL_DATABASE:-bigbear_fastpay}?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER:-fastpay}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-fastpay}
+      FASTPAY_JWT_SECRET: ${JWT_SECRET:-FastPayJwtSecretChangeMe-0123456789abcdef}
+      FASTPAY_PAY_PAGE_DOMAIN: ${PUBLIC_BASE_URL:-http://localhost}/fastpay-merchant
+      FASTPAY_NOTIFY_CALLBACK_URL: ${PUBLIC_BASE_URL:-http://localhost}/fastpay-server/api/notify/callback
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    container_name: fastpay-web
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      - server
+
+  # 对接演示，默认不启动：docker compose --profile demo up -d
+  demo:
+    build: ./fastpay-demo
+    container_name: fastpay-demo
+    restart: unless-stopped
+    profiles: ["demo"]
+    environment:
+      TZ: Asia/Shanghai
+      SPRING_PROFILES_ACTIVE: prod
+      FASTPAY_MERCHANT_NO: ${DEMO_MERCHANT_NO:-M744163504226}
+      FASTPAY_SHOP_NO: ${DEMO_SHOP_NO:-S745228666019}
+      FASTPAY_API_SECRET: ${DEMO_API_SECRET:-7c8cf40b280c4f33883bf21ea457d6d1}
+      FASTPAY_GATEWAY_URL: http://web/fastpay-server
+      FASTPAY_NOTIFY_URL: http://demo:7002/pay/notify
+      FASTPAY_RETURN_URL: ${PUBLIC_BASE_URL:-http://localhost}:7002/pay/return
+    ports:
+      - "7002:7002"
+
+volumes:
+  mysql-data:

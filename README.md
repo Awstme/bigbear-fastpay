@@ -428,6 +428,59 @@ mvn spring-boot:run
 
 ---
 
+## Docker 部署
+
+项目提供完整的 `docker-compose.yml`，一条命令即可启动 MySQL、后端服务、管理后台和商户平台。
+
+### 环境要求
+
+- Docker 24+
+- Docker Compose v2
+
+### 启动
+
+```bash
+cp .env.example .env          # 修改数据库密码、JWT_SECRET、PUBLIC_BASE_URL 等
+docker compose up -d --build
+```
+
+启动完成后：
+
+| 服务 | 地址 |
+|------|------|
+| 商户平台 | http://localhost/fastpay-merchant/ |
+| 管理后台 | http://localhost/fastpay-admin/ |
+| 后端 API | http://localhost/fastpay-server/api |
+| API 文档 | http://localhost/fastpay-server/doc.html |
+
+可选启动对接 Demo：
+
+```bash
+docker compose --profile demo up -d
+# 访问 http://localhost:7002/
+```
+
+### 目录说明
+
+```
+docker/
+├── Dockerfile.web        # 前端多阶段构建（Node 构建 + Nginx 托管）
+└── nginx.conf            # 静态站点、API 反向代理、WebSocket 升级
+fastpay-server/Dockerfile # 后端多阶段构建（Maven 构建 + JRE 运行）
+fastpay-demo/Dockerfile   # 对接 Demo 镜像
+```
+
+### 注意事项
+
+- 数据库脚本 `fastpay-server/src/main/resources/db/init.sql` 仅在 MySQL 数据卷为空时执行；需要重建数据时执行 `docker compose down -v`
+- `PUBLIC_BASE_URL` 必须改为公网可访问的域名（如 `https://pay.example.com`），否则支付页跳转地址和监听软件回调地址会指向 localhost
+- 生产环境务必修改 `.env` 中的 `MYSQL_ROOT_PASSWORD`、`MYSQL_PASSWORD`、`JWT_SECRET`；默认管理员账号来自 `init.sql`（`admin` / `123456`），部署后请及时修改
+- `.env` 中的 `MYSQL_USER` 是应用连接账号，不要填写 `root`
+- 默认监听 `80` 端口，可通过 `HTTP_PORT` 修改
+- 查看日志：`docker compose logs -f server`；停止：`docker compose down`
+
+---
+
 ## API 接口文档
 
 ### 接口概览
