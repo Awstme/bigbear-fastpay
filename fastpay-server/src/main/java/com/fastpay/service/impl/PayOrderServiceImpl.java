@@ -17,6 +17,7 @@ import com.fastpay.mapper.PayQrcodeMapper;
 import com.fastpay.mapper.ShopMapper;
 import com.fastpay.service.PayOrderService;
 import com.fastpay.service.PayQrcodeService;
+import com.fastpay.util.EpaySignUtil;
 import com.fastpay.util.SignUtil;
 import com.fastpay.vo.PayResultVO;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.Executor;
 
@@ -366,6 +368,12 @@ public class PayOrderServiceImpl extends ServiceImpl<PayOrderMapper, PayOrder> i
             return;
         }
 
+        // Epay 协议订单使用标准易支付回调格式
+        if (Constants.PayMethod.EPAY.equals(order.getPayMethod())) {
+            doSendEpayNotify(order, merchant, startTime);
+            return;
+        }
+
         // 构建回调参数
         TreeMap<String, Object> params = new TreeMap<>();
         params.put("merchantNo", merchant.getMerchantNo());
@@ -388,23 +396,52 @@ public class PayOrderServiceImpl extends ServiceImpl<PayOrderMapper, PayOrder> i
         try {
             // 发送回调，超时时间从10秒减少到5秒，提高响应速度
             String response = HttpUtil.post(order.getNotifyUrl(), params, 5000);
-            log.info("发送回调通知成功: orderNo={}, response={}, 耗时{}ms",
+            boolean success = response != null && "success".equalsIgnoreCase(response.trim());
+            updateNotifyResult(order, success);
+            log.info("发送回调通知: orderNo={}, response={}, 耗时{}ms",
                     order.getOrderNo(), response, System.currentTimeMillis() - startTime);
-
-            // 更新通知状态
-            order.setNotifyStatus("success".equalsIgnoreCase(response) ? 1 : 2);
-            order.setNotifyCount(order.getNotifyCount() + 1);
-            order.setLastNotifyTime(LocalDateTime.now());
-            this.updateById(order);
 
         } catch (Exception e) {
             log.error("发送回调通知失败: orderNo={}, error={}, 耗时{}ms",
                     order.getOrderNo(), e.getMessage(), System.currentTimeMillis() - startTime);
-            order.setNotifyStatus(2);
-            order.setNotifyCount(order.getNotifyCount() + 1);
-            order.setLastNotifyTime(LocalDateTime.now());
-            this.updateById(order);
+            updateNotifyResult(order, false);
         }
+    }
+
+    /**
+     * 发送标准易支付（Epay）格式的商户回调
+     */
+    private void doSendEpayNotify(PayOrder order, Merchant merchant, long startTime) {
+        TreeMap<String, String> params = new TreeMap<>();
+        params.put("pid", merchant.getMerchantNo());
+        params.put("trade_no", order.getOrderNo());
+        params.put("out_trade_no", order.getOutTradeNo());
+        params.put("type", order.getPayType());
+        params.put("name", order.getSubject());
+        params.put("money", order.getAmount().toPlainString());
+        params.put("trade_status", "TRADE_SUCCESS");
+        params.put("sign", EpaySignUtil.generateSign(params, merchant.getApiSecret()));
+        params.put("sign_type", "MD5");
+
+        try {
+            Map<String, Object> form = new TreeMap<>(params);
+            String response = HttpUtil.post(order.getNotifyUrl(), form, 5000);
+            boolean success = response != null && "success".equalsIgnoreCase(response.trim());
+            updateNotifyResult(order, success);
+            log.info("发送Epay回调通知: orderNo={}, response={}, 耗时{}ms",
+                    order.getOrderNo(), response, System.currentTimeMillis() - startTime);
+        } catch (Exception e) {
+            log.error("发送Epay回调通知失败: orderNo={}, error={}, 耗时{}ms",
+                    order.getOrderNo(), e.getMessage(), System.currentTimeMillis() - startTime);
+            updateNotifyResult(order, false);
+        }
+    }
+
+    private void updateNotifyResult(PayOrder order, boolean success) {
+        order.setNotifyStatus(success ? 1 : 2);
+        order.setNotifyCount(order.getNotifyCount() + 1);
+        order.setLastNotifyTime(LocalDateTime.now());
+        this.updateById(order);
     }
 
     @Override
@@ -414,6 +451,16 @@ public class PayOrderServiceImpl extends ServiceImpl<PayOrderMapper, PayOrder> i
             order.setReturnUrl(returnUrl);
             this.updateById(order);
             log.info("更新订单returnUrl: orderNo={}, returnUrl={}", orderNo, returnUrl);
+        }
+    }
+
+    @Override
+    public void updateNotifyUrl(String orderNo, String notifyUrl) {
+        PayOrder order = this.queryOrder(orderNo);
+        if (order != null) {
+            order.setNotifyUrl(notifyUrl);
+            this.updateById(order);
+            log.info("更新订单notifyUrl: orderNo={}, notifyUrl={}", orderNo, notifyUrl);
         }
     }
 

@@ -119,4 +119,12 @@ public interface PayOrderService extends IService<PayOrder> {
      * @param returnUrl 支付成功跳转地址
      */
     void updateReturnUrl(String orderNo, String returnUrl);
+
+    /**
+     * 更新订单的回调通知地址
+     *
+     * @param orderNo   平台订单号
+     * @param notifyUrl 回调通知地址
+     */
+    void updateNotifyUrl(String orderNo, String notifyUrl);
 }

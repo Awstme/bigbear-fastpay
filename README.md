@@ -643,6 +643,29 @@ $sign = strtoupper(md5($signStr));
 - 商户需验证签名后返回 `success` 字符串
 - 如未返回 `success`，系统会重试通知（最多 5 次，递增间隔）
 
+### Epay 兼容接口（New API 等）
+
+服务端提供标准易支付协议入口，供 New API 等系统接入：
+
+- 页面支付：`GET/POST /fastpay-server/submit.php`
+- 签名规则：过滤 `sign`、`sign_type` 和空值，参数名升序拼接 `a=b&c=d`，末尾直接追加商户 `api_secret` 后做 MD5（小写）
+- 回调格式：支付成功后按标准 Epay 参数回调订单的 `notify_url`，返回 `success` 视为成功
+
+New API 的「支付网关 → Epay」配置：
+
+| 配置项 | 填写 |
+|--------|------|
+| Epay 端点 | `https://fastpay.awstme.top/fastpay-server` |
+| 易支付商户 ID | 商户编号 `merchant_no`（若输入框只允许数字，填商户 ID） |
+| Epay 密钥 | 商户的 `api_secret` |
+| 回调地址 | New API 站点根地址，如 `https://newapi.awstme.top` |
+
+注意事项：
+
+- Epay 订单默认使用该商户第一个启用的店铺，需提前配置店铺、通道和可用收款二维码
+- New API 侧需要启用 Epay 回调（webhook），否则会返回 `fail`
+- 回调地址必须公网可访问；`notify_url` 由 New API 自动拼接 `/api/user/epay/notify`
+
 ---
 
 ## 对接演示

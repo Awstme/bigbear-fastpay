@@ -72,6 +72,8 @@ public class Constants {
         public static final String PAGE = "page";
         /** API接口支付 */
         public static final String API = "api";
+        /** 标准易支付（Epay）协议接入 */
+        public static final String EPAY = "epay";
     }
 
     /**
